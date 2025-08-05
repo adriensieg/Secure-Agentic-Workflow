@@ -76,32 +76,53 @@ graph TD
 
 ## Primary Decision Paths
 
-| Who Agent Serves | Runtime Environment | Risk Level | Authentication/Authorization Solution | Enhancements |
-|------------------|-------------------|------------|-------------------------------------|--------------|
-| **Serves a user** | Runs in browser or edge | Low | OAuth2 + JWT with narrow scopes | - |
-| **Serves a user** | Runs in browser or edge | Medium | OAuth2 + Phantom Token + API Gateway | - |
-| **Serves a user** | Runs in browser or edge | High | OAuth2.1 / RAR + DPoP or Split Token + short-lived tokens | Add revocation endpoint, session binding, logging |
-| **Serves a user** | Runs on backend / cloud / internal | Low | OAuth2 client credentials or delegated token | - |
-| **Serves a user** | Runs on backend / cloud / internal | Medium | OAuth2 + Phantom Token + introspection | - |
-| **Serves a user** | Runs on backend / cloud / internal | High | OAuth2.1 RAR + DPoP + audit logging | Add anomaly detection, user re-consent |
-| **Serves the organization / itself** | Kubernetes / microservice infra | Low | SPIFFE identity + mTLS | - |
-| **Serves the organization / itself** | Kubernetes / microservice infra | Medium | SPIFFE + short-lived certificates + audit | - |
-| **Serves the organization / itself** | Kubernetes / microservice infra | High | SPIFFE + ZCAPs for delegation + strict policy enforcement | Policy engine + dynamic authorization |
-| **Serves the organization / itself** | Cloud VM / serverless | Low | Workload Identity Federation | - |
-| **Serves the organization / itself** | Cloud VM / serverless | Medium | Workload Identity + scoped short creds | - |
-| **Serves the organization / itself** | Cloud VM / serverless | High | Workload Identity + DPoP-like binding + monitoring | - |
-| **Serves the organization / itself** | Edge or public-facing | Low | Split Token | - |
-| **Serves the organization / itself** | Edge or public-facing | Medium | Split Token + audience-bound JWT | - |
-| **Serves the organization / itself** | Edge or public-facing | High | Split Token + DPoP + token replay protection | - |
-| **Serves other agents / multi-agent collaboration** | Internal agent network | Low | SPIFFE for mutual auth | - |
-| **Serves other agents / multi-agent collaboration** | Internal agent network | Medium | SPIFFE + Macaroons for scoped delegation | - |
-| **Serves other agents / multi-agent collaboration** | Internal agent network | High | SPIFFE + ZCAPs chain + audit + revocation | Delegation expiration, capability revocation |
-| **Serves other agents / multi-agent collaboration** | Cross-domain or federated | Low | Federated capability exchange | - |
-| **Serves other agents / multi-agent collaboration** | Cross-domain or federated | Medium | DID-backed ZCAPs or Macaroons | - |
-| **Serves other agents / multi-agent collaboration** | Cross-domain or federated | High | Cross-domain ZCAPs + proof-of-possession + verification chains | - |
-| **Delegates between users** | User-to-user sharing with consent | Low | UMA 2.0 light delegation | - |
-| **Delegates between users** | User-to-user sharing with consent | Medium | OAuth RAR with consent logging | - |
-| **Delegates between users** | User-to-user sharing with consent | High | UMA 2.0 + RAR + audit trail + time limits | - |
+# Agent Authentication Decision Tree
+
+| Who Serves | Environment | Risk Level | Authentication Solution | Example Use Case |
+|------------|-------------|------------|------------------------|------------------|
+| **Serves a User** | Browser/Edge | Low | OAuth2 + JWT with narrow scopes | Smart assistant on phone scheduling meetings - uses OAuth to access calendar with read/write scope only |
+| **Serves a User** | Browser/Edge | Medium | OAuth2 + Phantom Token + API Gateway | Email assistant plugin in Gmail - phantom token hides actual credentials from browser |
+| **Serves a User** | Browser/Edge | High | OAuth2.1/RAR + DPoP or Split Token + short-lived tokens | Banking chatbot in mobile app - requires proof-of-possession and fine-grained permissions |
+| **Serves a User** | Backend/Cloud/Internal | Low | OAuth2 client credentials or delegated token | Simple notification service - uses service account to send emails on user's behalf |
+| **Serves a User** | Backend/Cloud/Internal | Medium | OAuth2 + Phantom Token + introspection | LLM agent booking travel on behalf of user - backend validates tokens via introspection |
+| **Serves a User** | Backend/Cloud/Internal | High | OAuth2.1 RAR + DPoP + audit logging | Financial advisor AI making investment decisions - requires detailed permissions and full audit trail |
+| **Serves Organization/Itself** | Kubernetes/Microservice | Low | SPIFFE identity + mTLS | Cron job backing up databases - uses service mesh identity for internal communication |
+| **Serves Organization/Itself** | Kubernetes/Microservice | Medium | SPIFFE + short-lived certificates + audit | CI/CD pipeline deploying to production - certificates expire quickly with deployment logging |
+| **Serves Organization/Itself** | Kubernetes/Microservice | High | SPIFFE + ZCAPs for delegation + strict policy enforcement | Compliance agent accessing sensitive customer data - capability-based auth with strict policies |
+| **Serves Organization/Itself** | Cloud VM/Serverless | Low | Workload Identity Federation | Backend job processing uploaded images - uses cloud provider's workload identity |
+| **Serves Organization/Itself** | Cloud VM/Serverless | Medium | Workload Identity + scoped short credentials | Data pipeline ETL process - short-lived credentials with specific resource access |
+| **Serves Organization/Itself** | Cloud VM/Serverless | High | Workload Identity + DPoP-like binding + monitoring | Automated trading system - credentials bound to specific workload with anomaly detection |
+| **Serves Organization/Itself** | Edge/Public-facing | Low | Split Token | Content delivery agent - reference token at edge, validation token in backend |
+| **Serves Organization/Itself** | Edge/Public-facing | Medium | Split Token + audience-bound JWT | API gateway rate limiting - tokens bound to specific audiences/endpoints |
+| **Serves Organization/Itself** | Edge/Public-facing | High | Split Token + DPoP + token replay protection | Payment processing edge service - prevents token replay attacks |
+| **Serves Other Agents** | Internal Agent Network | Low | SPIFFE for mutual auth | Internal agents sharing cached data - mutual TLS authentication between services |
+| **Serves Other Agents** | Internal Agent Network | Medium | SPIFFE + Macaroons for scoped delegation | Workflow orchestration - agents delegate specific tasks to other agents |
+| **Serves Other Agents** | Internal Agent Network | High | SPIFFE + ZCAPs chain + audit + revocation | Multi-agent fraud detection system - capability chains with full audit and instant revocation |
+| **Serves Other Agents** | Cross-domain/Federated | Low | Federated capability exchange | Cross-company data sharing agents - simple capability exchange between trusted domains |
+| **Serves Other Agents** | Cross-domain/Federated | Medium | DID-backed ZCAPs or Macaroons | Supply chain tracking agents - decentralized identity with capability delegation |
+| **Serves Other Agents** | Cross-domain/Federated | High | Cross-domain ZCAPs + proof-of-possession + verification chains | Multi-party financial settlement agents - cryptographic proof chains across organizations |
+| **Delegates Between Users** | User-to-user sharing | Low | UMA 2.0 light delegation | Photo sharing app - simple user consent for album access |
+| **Delegates Between Users** | User-to-user sharing | Medium | OAuth RAR with consent logging | Document collaboration tool - fine-grained permissions with consent audit |
+| **Delegates Between Users** | User-to-user sharing | High | UMA 2.0 + RAR + audit trail + time limits | Healthcare record sharing - detailed permissions, full audit, time-bounded access |
+
+## Enhancement Patterns
+
+| Base Solution | Enhancement | Example Application |
+|---------------|-------------|-------------------|
+| OAuth2.1/RAR + DPoP (High Risk User) | Add revocation endpoint, session binding, logging | Banking app with instant token revocation and session monitoring |
+| OAuth2.1 RAR + DPoP (High Risk Backend) | Add anomaly detection, user re-consent | Investment platform detecting unusual trading patterns |
+| SPIFFE + ZCAPs (High Risk Org) | Policy engine + dynamic authorization | Healthcare system with dynamic access control based on patient context |
+| SPIFFE + ZCAPs chain (High Risk Agents) | Delegation expiration, capability revocation | Autonomous vehicle fleet with time-limited agent interactions |
+
+## Key Terms
+
+- **OAuth2.1/RAR**: Rich Authorization Requests for fine-grained permissions
+- **DPoP**: Demonstration of Proof-of-Possession to bind tokens to clients
+- **SPIFFE**: Secure Production Identity Framework for Everyone
+- **ZCAPs**: Authorization Capabilities for delegation chains
+- **Macaroons**: Bearer tokens with embedded caveats for attenuation
+- **UMA 2.0**: User-Managed Access for user-controlled authorization
+- **Phantom Token**: Opaque reference token that hides actual JWT from client
 
 ## Decision Tree Structure
 
