@@ -3,41 +3,47 @@ Notes on how to secure Agentic Workflows
 
 ```mermaid
 graph TD
-    Start([Start: What does your AI agent do?])
 
-    Start --> A1[Acts for a user - e.g. email or scheduling]
-    Start --> A2[Accesses multiple APIs]
-    Start --> A3[Runs internally - cron, CI/CD, backend job]
-    Start --> A4[Runs in browser or edge]
-    Start --> A5[Interacts with other agents]
-    Start --> A6[Delegates access from one user to another]
-    Start --> A7[Accesses cloud resources without secrets]
+    A0([Start])
 
-    A1 --> B1[Impersonation or delegation?]
-    B1 --> C1[Impersonation → OAuth2 + Phantom Token]
-    B1 --> C2[Delegation → OAuth2.1 + RAR]
-    C1 --> C1a[High risk? Add DPoP or Split Token]
+    %% === LAYER 1: WHO DOES THE AGENT SERVE? ===
+    A0 --> Q1["Who does the agent serve?"]
+    Q1 --> Q1A["Individual User"]
+    Q1 --> Q1B["Multiple Users / Org"]
+    Q1 --> Q1C["System or Infrastructure"]
 
-    A2 --> B2[Need central policy?]
-    B2 --> D1[Yes → OAuth2 + API Gateway + Phantom Token]
-    B2 --> D2[No → OAuth2 + JWT + Scope Filtering]
-    D2 --> D2a[Consider DPoP]
+    %% === LAYER 2: WHERE DOES THE AGENT RUN? ===
+    Q1A --> Q2A["Where does the agent run?"]
+    Q1B --> Q2B["Where does the agent run?"]
+    Q1C --> Q2C["Where does the agent run?"]
 
-    A3 --> E1[Environment?]
-    E1 --> F1[Kubernetes → SPIFFE/SPIRE]
-    E1 --> F2[Cloud → Workload Identity Federation]
-    E1 --> F3[VM → Client Credentials + JWT]
+    Q2A --> L1["Browser or Edge"]
+    Q2A --> L2["User's Device or VM"]
+    Q2B --> L3["Backend / Cloud"]
+    Q2C --> L4["Kubernetes / CI / Internal Infra"]
 
-    A4 --> G1[Token protection needed?]
-    G1 --> H1[Yes → Split Token or DPoP]
-    G1 --> H2[Add audience-bound JWT]
+    %% === LAYER 3: WHAT DOES THE AGENT DO? ===
+    L1 --> F1["Accesses personal APIs (e.g., email, calendar)"]
+    L2 --> F2["Acts on user behalf (delegation/imitation)"]
+    L3 --> F3["Calls multiple APIs or microservices"]
+    L4 --> F4["Handles internal tasks / jobs / cron"]
 
-    A5 --> I1[Need delegation between agents?]
-    I1 --> J1[Yes → ZCAPs or Macaroons]
-    I1 --> J2[No → SPIFFE or mTLS]
+    %% === LAYER 4: WHAT'S THE SECURITY RISK LEVEL? ===
+    F1 --> R1["High Risk"]
+    F1 --> R2["Medium Risk"]
+    F2 --> R1
+    F2 --> R2
+    F3 --> R2
+    F4 --> R3["Low Risk"]
 
-    A6 --> K1[User consent required?]
-    K1 --> L1[Yes → UMA 2.0 or OAuth RAR]
+    %% === LAYER 5: DECISION NODES (SECURITY DESIGN) ===
+    R1 --> D1["Use OAuth2 + Phantom Token + DPoP"]
+    R2 --> D2["Use OAuth2.1 + JWT + Scope Filtering"]
+    R3 --> D3["Use SPIFFE / mTLS or Client Credentials"]
 
-    A7 --> M1[Use Workload Identity Federation]
+    D1 --> O1["Browser? Add Split Token"]
+    D2 --> O2["Edge? Use audience-bound JWT"]
+    D3 --> O3["Kubernetes? Use SPIRE / SPIFFE"]
+    D3 --> O4["Cloud Infra? Use Workload Identity Federation"]
+
 ```
