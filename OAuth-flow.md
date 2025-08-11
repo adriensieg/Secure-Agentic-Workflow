@@ -3,6 +3,7 @@
 ## Concepts
 - `Tokens` vs. `Cookie` vs. `Sessions`
 - **Cookie**: `HttpOnly` vs. `Secure` vs. `SameSite`
+- **Cookie-based** vs. **Bearer Token-based**
 
 ## Flow
 
@@ -99,3 +100,55 @@ sequenceDiagram
 
 - **<mark>Step 37 to 43</mark>**: Resource server verifies the JWT by fetching the `JWKS` (cache keys), validating the signature and claims. If expired, SPA uses `refresh_token` to obtain a new access token or reauthenticates.
 
+
+## Security recommendations & small checklist
+- Prefer BFF (cookie + HttpOnly cookie) pattern for SPAs when you control a backend — best balance: tokens never touch JS, backend handles refresh.
+- If doing pure SPA: use Authorization Code + PKCE; store access token in memory (not localStorage). Carefully handle refresh tokens (rotation, use refresh via backend if possible).
+- Use SameSite=strict/lax and CSRF protection on cookie endpoints.
+- Cache JWKS but refresh according to kid mismatch or expiry. Validate iss, aud, exp, nbf, iat, optionally azp or scp.
+- Log & monitor refresh failures (token theft indicators). Enforce Conditional Access & MFA in Azure (MFA shows in amr claim).
+- Consider token lifetimes: short `access_token` and refresh token rotation for better security.
+
+
+## Cookie vs Bearer Flow
+
+Think of it like **two ways of carrying your building pass**:
+- **Cookie-based**: You store your pass inside a sealed pouch (HttpOnly cookie) that automatically gets handed to the guard whenever you visit the building. You never directly touch the pass; the browser takes care of it.
+- **Bearer-token-based**: You keep the pass in your hand and present it manually at every door (via Authorization header).
+
+| Feature            | Cookie-based                                                   | Bearer Token-based                                              |
+| ------------------ | -------------------------------------------------------------- | --------------------------------------------------------------- |
+| **Storage**        | Session ID in HttpOnly cookie (backend stores tokens)          | JWT stored client-side (memory/localStorage)                    |
+| **Security**       | Stronger against XSS (HttpOnly cookies)                        | Vulnerable if JS-accessible storage is compromised              |
+| **CSRF Risk**      | Needs CSRF protection (cookies auto-send)                      | Immune to CSRF (explicit header)                                |
+| **Statelessness**  | Usually stateful (backend session store)                       | Stateless (JWT validated without DB)                            |
+| **Token Rotation** | Managed by backend                                             | Managed by frontend                                             |
+| **Ideal For**      | Sensitive apps where you want to shield tokens from browser JS | APIs for SPAs/mobile apps where backend is not storing sessions |
+
+```mermaid
+flowchart TB
+    subgraph CookieFlow["Cookie-Based OAuth2 Flow"]
+        A1[Browser visits /protected] --> A2[Backend checks session cookie]
+        A2 -->|No cookie| A3[Redirect to Azure Entra ID login]
+        A3 --> A4[Azure login + MFA]
+        A4 --> A5[Redirect back to backend with auth code]
+        A5 --> A6[Backend exchanges code for Access + ID + Refresh Tokens]
+        A6 --> A7[Backend stores tokens in server session store]
+        A7 --> A8[Backend sets HttpOnly Secure Cookie with session ID]
+        A8 --> A9[Browser automatically sends cookie on every request]
+        A9 --> A10[Backend retrieves tokens from session and verifies JWT]
+        A10 --> A11[Serve protected resource]
+    end
+
+    subgraph BearerFlow["Bearer Token OAuth2 Flow"]
+        B1[Browser visits /protected] --> B2[Backend says: Need Authorization]
+        B2 --> B3[Browser redirects user to Azure login]
+        B3 --> B4[Azure login + MFA]
+        B4 --> B5[Redirect back to frontend with auth code]
+        B5 --> B6[Frontend exchanges code (PKCE) directly with Azure for tokens]
+        B6 --> B7[Frontend stores Access Token in memory/localStorage]
+        B7 --> B8[Frontend sends token in Authorization header: Bearer <token>]
+        B8 --> B9[Backend verifies JWT signature + claims]
+        B9 --> B10[Serve protected resource]
+    end
+```
