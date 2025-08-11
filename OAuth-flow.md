@@ -100,6 +100,20 @@ sequenceDiagram
 
 - **<mark>Step 37 to 43</mark>**: Resource server verifies the JWT by fetching the `JWKS` (cache keys), validating the signature and claims. If expired, SPA uses `refresh_token` to obtain a new access token or reauthenticates.
 
+## Purpose of each function
+
+| Function                   | Purpose                                         | Metaphor                                                         |
+| -------------------------- | ----------------------------------------------- | ---------------------------------------------------------------- |
+| **Authorization Request**  | Ask Azure for a login page with required scopes | Requesting entry form at security desk                           |
+| **PKCE**                   | Prevents code interception in public clients    | Secret handshake to prove you’re the one who started the request |
+| **Authorization Code**     | Short-lived proof to exchange for tokens        | Receipt for your visitor badge                                   |
+| **Access Token**           | Proof of what you can do                        | Temporary badge with your access level                           |
+| **ID Token**               | Proof of who you are                            | Passport with your identity details                              |
+| **Refresh Token**          | Lets you renew your badge without full re-check | VIP pass for quick re-entry                                      |
+| **HttpOnly Cookie**        | Stores token/session safely from JS             | Locked badge pouch                                               |
+| **Bearer Token in Header** | Directly present the token in each request      | Showing badge at every door                                      |
+| **MFA**                    | Extra identity check                            | Fingerprint scan after showing ID                                |
+| **Signature Verification** | Ensure JWT wasn’t forged                        | Guard checking hologram on badge                                 |
 
 ## Security recommendations & small checklist
 - Prefer BFF (cookie + HttpOnly cookie) pattern for SPAs when you control a backend — best balance: tokens never touch JS, backend handles refresh.
