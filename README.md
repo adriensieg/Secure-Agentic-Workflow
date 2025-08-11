@@ -169,83 +169,66 @@ Each environment path branches into three risk levels:
 ```mermaid
 sequenceDiagram
     autonumber
-    %% Participants
     participant User
     participant Browser
     participant SPA as Frontend (SPA JS)
-    participant Backend as Backend (Python / Confidential / BFF)
-    participant Session as Session Store (DB)
+    participant Backend as Backend (Python / BFF)
+    participant Session as Session Store
     participant Azure as Azure Entra ID (IdP)
-    participant JWKS as Azure JWKS (keys)
-    participant API as Resource API (Backend or separate)
+    participant JWKS as Azure JWKS (Keys)
+    participant API as Resource API
 
-    Note over Browser,Backend: --- User tries to access a protected resource ---
+    Note right of Browser: Cookie-based / BFF flow - Backend exchanges code and stores tokens in session. Browser only gets HttpOnly cookie.
 
-    %% ===== Cookie-based (Backend/BFF) =====
-    Note right of Browser: Cookie-based / BFF flow (Backend does token exchange; browser gets HttpOnly session cookie)
     Browser->>Backend: 1) GET /protected (no session cookie)
-    Backend-->>Browser: 2) 302 Redirect to Azure /authorize?response_type=code&client_id=CFG&redirect_uri=https://app/callback&scope=openid%20profile%20offline_access%20api.read&state=S&nonce=N
-    Browser->>Azure: 3) GET /authorize (user lands on IdP)
-    Note right of Azure: 4) Azure shows login UI -> user enters credentials -> Azure triggers MFA (conditional access)
-    Azure-->>Browser: 5) 302 Redirect to https://app/callback?code=AUTH_CODE&state=S
-    Browser->>Backend: 6) GET /callback?code=AUTH_CODE&state=S
-    Backend->>Azure: 7) POST /token  (grant_type=authorization_code, code=AUTH_CODE, redirect_uri=..., client_id, client_secret[, pkce_verifier])
-    Azure-->>Backend: 8) 200 { access_token: <JWT>, id_token: <JWT>, refresh_token: <opaque>, expires_in:3600, token_type:Bearer }
-    Backend->>Session: 9) Store session: { session_id: SESS123, access_token, refresh_token, user_claims_from_id_token, expires_at }
-    Backend-->>Browser: 10) Set-Cookie: session_id=SESS123; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=3600
-    Note over Browser,Backend: 11) Subsequent browser requests automatically send cookie
+    Backend-->>Browser: 2) 302 Redirect to Azure /authorize with scopes, state, nonce
+    Browser->>Azure: 3) GET /authorize
+    Azure-->>User: 4) Prompt username/password + MFA
+    User-->>Azure: 5) Provide credentials + MFA code
+    Azure-->>Browser: 6) 302 Redirect to /callback?code=AUTH_CODE&state=S
+    Browser->>Backend: 7) GET /callback with AUTH_CODE
+    Backend->>Azure: 8) POST /token with code, client_secret, redirect_uri
+    Azure-->>Backend: 9) 200 {access_token (JWT), id_token (JWT), refresh_token}
+    Backend->>Session: 10) Store tokens with session_id
+    Backend-->>Browser: 11) Set-Cookie: session_id=SESS123; HttpOnly; Secure; SameSite=Strict
 
-    Browser->>Backend: 12) GET /api/data (Cookie: session_id=SESS123)
-    Backend->>Session: 13) lookup SESS123 -> get access_token + expiry
-    alt access_token still valid
-        Backend->>JWKS: 14) (cached) get public key by kid ; verify JWT signature & claims (iss,aud,exp,scope)
-        JWKS-->>Backend: 15) public key
-        Backend-->>Browser: 16) 200 {protected resource}
-    else access_token expired
-        Backend->>Azure: 17) POST /token (grant_type=refresh_token, refresh_token=..., client_id, client_secret)
-        Azure-->>Backend: 18) 200 { new access_token, new refresh_token, expires_in }
-        Backend->>Session: 19) update session tokens
-        Backend-->>Browser: 20) 200 {protected resource}
+    Note over Browser,Backend: Subsequent requests send cookie automatically
+
+    Browser->>Backend: 12) GET /api/data (Cookie: session_id)
+    Backend->>Session: 13) Retrieve tokens
+    Backend->>JWKS: 14) Get public key, verify JWT signature & claims
+    JWKS-->>Backend: 15) Key
+    Backend-->>Browser: 16) 200 Protected resource
+
+    alt Access token expired
+        Backend->>Azure: 17) POST /token (grant_type=refresh_token)
+        Azure-->>Backend: 18) 200 New tokens
+        Backend->>Session: 19) Update session
+        Backend-->>Browser: 20) 200 Protected resource
     end
 
-    %% Logout / Revoke for Cookie flow
-    Browser->>Backend: 21) POST /logout (Cookie: SESS123)
-    Backend->>Session: 22) delete session SESS123 (remove tokens)
-    Backend->>Azure: 23) POST /revoke (token=refresh_token OR token=access_token)  -- optional
-    Azure-->>Backend: 24) 200 OK
-    Backend-->>Browser: 25) Set-Cookie: session_id=; Max-Age=0; Path=/; HttpOnly; Secure
-    Backend-->>Browser: 26) Redirect -> Azure logout endpoint (end SSO) optionally
+    Note right of Browser: SPA / Bearer flow - SPA exchanges code, keeps token client-side, sends Authorization header.
 
-    %% ===== Bearer Token (SPA) =====
-    Note right of SPA: Bearer token / SPA flow (PKCE). SPA exchanges code -> keeps access token in memory (or localStorage, less safe).
-    Browser->>SPA: 27) User clicks "Login" in SPA
-    SPA-->>Browser: 28) 302 Redirect to Azure /authorize?response_type=code&client_id=SPA_CLIENT&redirect_uri=https://spa/callback&scope=openid%20profile%20offline_access%20api.read&state=S2&nonce=N2&code_challenge=CH&code_challenge_method=S256
-    Browser->>Azure: 29) GET /authorize (SPA)
-    Note right of Azure: 30) Azure login + MFA
-    Azure-->>Browser: 31) 302 Redirect to https://spa/callback?code=AUTH_CODE_SP&state=S2
-    Browser->>SPA: 32) GET /callback?code=AUTH_CODE_SP&state=S2
-    SPA->>Azure: 33) POST /token (grant_type=authorization_code, code=AUTH_CODE_SP, redirect_uri=https://spa/callback, client_id=SPA_CLIENT, code_verifier=VER)
-    Azure-->>SPA: 34) 200 { access_token: <JWT>, id_token: <JWT>, refresh_token: <rotating?>, expires_in }
-    Note over SPA: 35) Store access_token in memory (recommended); if storing anywhere persistent -> risk of XSS
-    SPA->>API: 36) GET /api/data Authorization: Bearer <access_token>
-    API->>JWKS: 37) fetch jwks_uri (cached) -> select key by kid -> verify JWT signature and claims (iss,aud,exp,scope,azp)
-    JWKS-->>API: 38) public key
-    alt token valid
-        API-->>SPA: 39) 200 { protected resource }
-    else token expired
-        SPA->>Azure: 40) POST /token (grant_type=refresh_token, refresh_token=...)
-        Azure-->>SPA: 41) 200 { new access_token, new_refresh_token? }
-        SPA->>API: 42) GET /api/data Authorization: Bearer <new_access_token>
-        API->>JWKS: 43) verify and respond 200
+    Browser->>SPA: 21) User clicks Login
+    SPA-->>Browser: 22) Redirect to Azure /authorize with PKCE
+    Browser->>Azure: 23) GET /authorize
+    Azure-->>User: 24) Prompt username/password + MFA
+    User-->>Azure: 25) Provide credentials + MFA
+    Azure-->>Browser: 26) Redirect to /callback?code=AUTH_CODE_SP
+    Browser->>SPA: 27) GET /callback with AUTH_CODE_SP
+    SPA->>Azure: 28) POST /token with code, code_verifier
+    Azure-->>SPA: 29) 200 {access_token (JWT), id_token (JWT), refresh_token?}
+    SPA->>API: 30) GET /api/data Authorization: Bearer <access_token>
+    API->>JWKS: 31) Get key, verify JWT
+    JWKS-->>API: 32) Key
+    API-->>SPA: 33) 200 Protected resource
+
+    alt Token expired
+        SPA->>Azure: 34) POST /token (grant_type=refresh_token)
+        Azure-->>SPA: 35) New tokens
+        SPA->>API: 36) GET /api/data Authorization: Bearer <access_token>
+        API->>JWKS: 37) Verify JWT
+        API-->>SPA: 38) 200 Protected resource
     end
-
-    %% Error / Invalid refresh handling
-    Note right of SPA: If refresh fails (invalid_grant) -> SPA must re-initiate login (redirect to /authorize)
-
-    %% Token inspection & shape notes
-    Note over Azure,Backend: Token Response sample (abbrev): 
-      {"access_token":"eyJhbGciOiJSUzI1NiIsInR5cCI...","id_token":"eyJ...","refresh_token":"0.ABc..."}
-    Note over API,Backend: JWT decoded payload sample (abbrev):
-      {"iss":"https://login.microsoftonline.com/{tid}/v2.0","aud":"api-client-id","sub":"user-id","scp":"user.read api.read","iat":169..., "exp":169...,"amr":["pwd","mfa"]}
 ```
 
