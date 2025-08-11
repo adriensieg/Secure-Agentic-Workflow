@@ -165,6 +165,7 @@ Each environment path branches into three risk levels:
 - **Medium Risk**: Elevated security needs, additional protections required
 - **High Risk**: Critical security requirements, comprehensive protection needed
 
+# End-to-End OAuth2 Authorization Code Flow with PKCE, MFA, Cookies (BFF Pattern) and Bearer Tokens (SPA Pattern) Using Azure Entra ID
 
 ```mermaid
 sequenceDiagram
@@ -231,4 +232,33 @@ sequenceDiagram
         API-->>SPA: 38) Return protected resource
     end
 ```
+
+- **<mark>Step 1</mark>**: Browser requests a **protected page/resource**.
+   
+- **<mark>Step 2</mark>**: Backend detects **no valid session cookie** → issues an **OAuth2 Authorization Request** (redirect to Azure /authorize). Important params:
+    - `response_type`=code,
+    - `client_id`,
+    - `redirect_uri`,
+    - `scope`=openid profile offline_access <api-scope>,
+    - `state`,
+    - `nonce`,
+    - (for SPA add `code_challenge`/`PKCE`).
+
+User authenticates at Azure Entra ID: username/password → MFA step (phone, push, TOTP, FIDO, etc.) as required by **tenant Conditional Access**. Azure then redirects back with an **authorization code**.
+
+6–8) Token exchange (Backend/BFF): Backend exchanges code at Azure token endpoint with client_secret (confidential client) for access_token (JWT), id_token (JWT), and refresh_token (long, opaque string). Azure signs JWTs with RS256 and publishes keys via JWKS.
+
+9–10) Backend stores tokens server-side (Session Store) and issues a HttpOnly Secure cookie to the browser: session_id=SESS123; HttpOnly; Secure; SameSite=Strict. Browser cannot read this cookie via JS (protects against XSS); cookie is auto-sent on future requests.
+
+11–16) On each protected API request the backend reads session_id, pulls tokens from Session Store, validates the JWT (signature → get key from JWKS, then check iss, aud, exp, nbf, required scp/roles). If access token is valid, respond.
+
+17–19) If the access token is expired, the backend uses the stored refresh_token to get a fresh access_token (token rotation usually returns a new refresh token). Update Session Store.
+
+21–26) Logout: Backend removes session, optionally calls Azure revocation endpoint to revoke refresh_token, clears cookie, and may redirect user to Azure logout endpoint to clear SSO session.
+
+27–36) SPA (Bearer) flow: SPA initiates the same /authorize redirect but includes PKCE (code_challenge). After Azure login + MFA, SPA receives a code, then directly POSTs to /token with code_verifier (no client_secret for public clients). Azure returns access_token (JWT), id_token, maybe refresh_token depending on configuration. SPA stores access token in memory (recommended). For API calls it sends Authorization: Bearer <access_token>.
+
+37–43) Resource server verifies the JWT by fetching the JWKS (cache keys), validating the signature and claims. If expired, SPA uses refresh_token to obtain a new access token or reauthenticates.
+
+
 
