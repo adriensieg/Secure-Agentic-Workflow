@@ -84,7 +84,7 @@ sequenceDiagram
     - `nonce`,
     - (for SPA add `code_challenge`/`PKCE`).
  
-```JSON
+```bash
 GET https://login.microsoftonline.com/{tenant}/oauth2/v2.0/authorize?
   client_id=YOUR_CLIENT_ID
   &response_type=code
