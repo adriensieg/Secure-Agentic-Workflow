@@ -171,64 +171,64 @@ sequenceDiagram
     autonumber
     participant User
     participant Browser
-    participant SPA as Frontend (SPA JS)
-    participant Backend as Backend (Python / BFF)
-    participant Session as Session Store
-    participant Azure as Azure Entra ID (IdP)
-    participant JWKS as Azure JWKS (Keys)
-    participant API as Resource API
+    participant SPA as Frontend-SPA
+    participant Backend as Backend-BFF
+    participant Session as Session-Store
+    participant Azure as Azure-Entra-ID
+    participant JWKS as Azure-JWKS
+    participant API as Resource-API
 
-    Note right of Browser: Cookie-based / BFF flow - Backend exchanges code and stores tokens in session. Browser only gets HttpOnly cookie.
+    Note right of Browser: Cookie-based BFF flow
 
-    Browser->>Backend: 1) GET /protected (no session cookie)
-    Backend-->>Browser: 2) 302 Redirect to Azure /authorize with scopes, state, nonce
+    Browser->>Backend: 1) GET /protected (no cookie)
+    Backend-->>Browser: 2) Redirect to Azure authorize
     Browser->>Azure: 3) GET /authorize
-    Azure-->>User: 4) Prompt username/password + MFA
-    User-->>Azure: 5) Provide credentials + MFA code
-    Azure-->>Browser: 6) 302 Redirect to /callback?code=AUTH_CODE&state=S
-    Browser->>Backend: 7) GET /callback with AUTH_CODE
-    Backend->>Azure: 8) POST /token with code, client_secret, redirect_uri
-    Azure-->>Backend: 9) 200 {access_token (JWT), id_token (JWT), refresh_token}
-    Backend->>Session: 10) Store tokens with session_id
-    Backend-->>Browser: 11) Set-Cookie: session_id=SESS123; HttpOnly; Secure; SameSite=Strict
+    Azure-->>User: 4) Prompt login and MFA
+    User-->>Azure: 5) Provide credentials
+    Azure-->>Browser: 6) Redirect with auth code
+    Browser->>Backend: 7) Callback with auth code
+    Backend->>Azure: 8) Token request with code and client secret
+    Azure-->>Backend: 9) Return access token, id token, refresh token
+    Backend->>Session: 10) Store tokens and session id
+    Backend-->>Browser: 11) Set cookie with session id (HttpOnly, Secure)
 
-    Note over Browser,Backend: Subsequent requests send cookie automatically
+    Note over Browser,Backend: Subsequent requests include cookie automatically
 
-    Browser->>Backend: 12) GET /api/data (Cookie: session_id)
-    Backend->>Session: 13) Retrieve tokens
-    Backend->>JWKS: 14) Get public key, verify JWT signature & claims
-    JWKS-->>Backend: 15) Key
-    Backend-->>Browser: 16) 200 Protected resource
+    Browser->>Backend: 12) Request protected API with cookie
+    Backend->>Session: 13) Retrieve stored tokens
+    Backend->>JWKS: 14) Get public key and verify JWT
+    JWKS-->>Backend: 15) Key returned
+    Backend-->>Browser: 16) Return protected resource
 
     alt Access token expired
-        Backend->>Azure: 17) POST /token (grant_type=refresh_token)
-        Azure-->>Backend: 18) 200 New tokens
-        Backend->>Session: 19) Update session
-        Backend-->>Browser: 20) 200 Protected resource
+        Backend->>Azure: 17) Refresh token request
+        Azure-->>Backend: 18) Return new tokens
+        Backend->>Session: 19) Update stored tokens
+        Backend-->>Browser: 20) Return protected resource
     end
 
-    Note right of Browser: SPA / Bearer flow - SPA exchanges code, keeps token client-side, sends Authorization header.
+    Note right of Browser: SPA Bearer token flow
 
-    Browser->>SPA: 21) User clicks Login
-    SPA-->>Browser: 22) Redirect to Azure /authorize with PKCE
+    Browser->>SPA: 21) User clicks login
+    SPA-->>Browser: 22) Redirect to Azure authorize with PKCE
     Browser->>Azure: 23) GET /authorize
-    Azure-->>User: 24) Prompt username/password + MFA
-    User-->>Azure: 25) Provide credentials + MFA
-    Azure-->>Browser: 26) Redirect to /callback?code=AUTH_CODE_SP
-    Browser->>SPA: 27) GET /callback with AUTH_CODE_SP
-    SPA->>Azure: 28) POST /token with code, code_verifier
-    Azure-->>SPA: 29) 200 {access_token (JWT), id_token (JWT), refresh_token?}
-    SPA->>API: 30) GET /api/data Authorization: Bearer <access_token>
-    API->>JWKS: 31) Get key, verify JWT
-    JWKS-->>API: 32) Key
-    API-->>SPA: 33) 200 Protected resource
+    Azure-->>User: 24) Prompt login and MFA
+    User-->>Azure: 25) Provide credentials
+    Azure-->>Browser: 26) Redirect with auth code
+    Browser->>SPA: 27) Callback with auth code
+    SPA->>Azure: 28) Token request with code and code verifier
+    Azure-->>SPA: 29) Return access token, id token, refresh token
+    SPA->>API: 30) Request API with bearer access token
+    API->>JWKS: 31) Get public key and verify JWT
+    JWKS-->>API: 32) Key returned
+    API-->>SPA: 33) Return protected resource
 
     alt Token expired
-        SPA->>Azure: 34) POST /token (grant_type=refresh_token)
-        Azure-->>SPA: 35) New tokens
-        SPA->>API: 36) GET /api/data Authorization: Bearer <access_token>
+        SPA->>Azure: 34) Refresh token request
+        Azure-->>SPA: 35) Return new tokens
+        SPA->>API: 36) Request API with bearer access token
         API->>JWKS: 37) Verify JWT
-        API-->>SPA: 38) 200 Protected resource
+        API-->>SPA: 38) Return protected resource
     end
 ```
 
