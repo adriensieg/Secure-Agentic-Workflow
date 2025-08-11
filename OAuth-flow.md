@@ -116,6 +116,9 @@ Think of it like **two ways of carrying your building pass**:
 - **Cookie-based**: You store your pass inside a sealed pouch (HttpOnly cookie) that automatically gets handed to the guard whenever you visit the building. You never directly touch the pass; the browser takes care of it.
 - **Bearer-token-based**: You keep the pass in your hand and present it manually at every door (via Authorization header).
 
+- **Cookie-based** = You hand the pouch to your assistant (browser), they pass it to security automatically, you never touch the actual badge.
+- **Bearer token** = You keep the badge in your own hand and flash it to every guard yourself.
+
 | Feature            | Cookie-based                                                   | Bearer Token-based                                              |
 | ------------------ | -------------------------------------------------------------- | --------------------------------------------------------------- |
 | **Storage**        | Session ID in HttpOnly cookie (backend stores tokens)          | JWT stored client-side (memory/localStorage)                    |
