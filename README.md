@@ -173,9 +173,9 @@ flowchart TB
     subgraph CookieFlow["Cookie-Based OAuth2 Flow"]
         A1[Browser visits /protected] --> A2[Backend checks session cookie]
         A2 -->|No cookie| A3[Redirect to Azure Entra ID login]
-        A3 --> A4[Azure login + MFA]
+        A3 --> A4[Azure login and MFA]
         A4 --> A5[Redirect back to backend with auth code]
-        A5 --> A6[Backend exchanges code for Access + ID + Refresh Tokens]
+        A5 --> A6[Backend exchanges code for Access, ID, and Refresh Tokens]
         A6 --> A7[Backend stores tokens in server session store]
         A7 --> A8[Backend sets HttpOnly Secure Cookie with session ID]
         A8 --> A9[Browser automatically sends cookie on every request]
@@ -184,14 +184,14 @@ flowchart TB
     end
 
     subgraph BearerFlow["Bearer Token OAuth2 Flow"]
-        B1[Browser visits /protected] --> B2[Backend says: Need Authorization]
+        B1[Browser visits /protected] --> B2[Backend says Need Authorization]
         B2 --> B3[Browser redirects user to Azure login]
-        B3 --> B4[Azure login + MFA]
+        B3 --> B4[Azure login and MFA]
         B4 --> B5[Redirect back to frontend with auth code]
-        B5 --> B6[Frontend exchanges code \(PKCE\) directly with Azure for tokens]
-        B6 --> B7[Frontend stores Access Token in memory/localStorage]
-        B7 --> B8[Frontend sends token in Authorization header: Bearer &lt;token&gt;]
-        B8 --> B9[Backend verifies JWT signature + claims]
+        B5 --> B6[Frontend exchanges code PKCE directly with Azure for tokens]
+        B6 --> B7[Frontend stores Access Token in memory or local storage]
+        B7 --> B8[Frontend sends token in Authorization header Bearer token]
+        B8 --> B9[Backend verifies JWT signature and claims]
         B9 --> B10[Serve protected resource]
     end
 ```
