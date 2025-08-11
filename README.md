@@ -167,3 +167,30 @@ Each environment path branches into three risk levels:
 - **Medium Risk**: Elevated security needs, additional protections required
 - **High Risk**: Critical security requirements, comprehensive protection needed
 
+
+```mermaid
+sequenceDiagram
+    participant Browser
+    participant Backend
+    participant Azure as Azure Entra ID
+
+    %% Cookie-based
+    Browser->>Backend: GET /protected (no cookie)
+    Backend-->>Browser: 302 Redirect to Azure
+    Browser->>Azure: Auth request + PKCE
+    Azure-->>Browser: Auth code
+    Browser->>Backend: /callback?code=...
+    Backend->>Azure: Exchange code for Access+ID+Refresh tokens
+    Azure-->>Backend: Tokens (JWTs)
+    Backend->>Backend: Store tokens in session store
+    Backend-->>Browser: Set-Cookie: session_id=...
+    Note over Browser,Backend: On next requests, cookie auto-sent
+
+    %% Bearer-token
+    Browser->>Azure: Auth request + PKCE
+    Azure-->>Browser: Auth code
+    Browser->>Azure: Exchange code for tokens directly
+    Azure-->>Browser: Tokens (JWTs)
+    Browser->>Backend: GET /protected with Authorization: Bearer <JWT>
+```
+
