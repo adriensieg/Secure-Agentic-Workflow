@@ -83,6 +83,19 @@ sequenceDiagram
     - `state`,
     - `nonce`,
     - (for SPA add `code_challenge`/`PKCE`).
+ 
+```JSON
+GET https://login.microsoftonline.com/{tenant}/oauth2/v2.0/authorize?
+  client_id=YOUR_CLIENT_ID
+  &response_type=code
+  &redirect_uri=https://app.example.com/auth/callback
+  &response_mode=query
+  &scope=openid%20profile%20offline_access%20api://API_CLIENT_ID/access_as_user
+  &state=xyz
+  &nonce=nonce123
+  &code_challenge=E9Mel...   # SPA only (PKCE)
+  &code_challenge_method=S256
+```
 
 - **<mark>Step 3 to 5</mark>**: User authenticates at Azure Entra ID: username/password → MFA step (phone, push, TOTP, FIDO, etc.) as required by **tenant Conditional Access**. Azure then redirects back with an **authorization code**.
 
