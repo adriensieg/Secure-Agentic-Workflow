@@ -188,7 +188,7 @@ flowchart TB
         B2 --> B3[Browser redirects user to Azure login]
         B3 --> B4[Azure login + MFA]
         B4 --> B5[Redirect back to frontend with auth code]
-        B5 --> B6[Frontend exchanges code (PKCE) directly with Azure for tokens]
+        B5 --> B6[Frontend exchanges code \(PKCE\) directly with Azure for tokens]
         B6 --> B7[Frontend stores Access Token in memory/localStorage]
         B7 --> B8[Frontend sends token in Authorization header: Bearer &lt;token&gt;]
         B8 --> B9[Backend verifies JWT signature + claims]
