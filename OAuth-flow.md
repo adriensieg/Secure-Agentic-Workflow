@@ -129,30 +129,65 @@ Think of it like **two ways of carrying your building pass**:
 | **Ideal For**      | Sensitive apps where you want to shield tokens from browser JS | APIs for SPAs/mobile apps where backend is not storing sessions |
 
 ```mermaid
-flowchart TB
-    subgraph CookieFlow["Cookie-Based OAuth2 Flow"]
-        A1["Browser visits /protected"] --> A2["Backend checks session cookie"]
-        A2 -->|No cookie| A3["Redirect to Azure Entra ID login"]
-        A3 --> A4["Azure login + MFA"]
-        A4 --> A5["Redirect back to backend with auth code"]
-        A5 --> A6["Backend exchanges code for Access + ID + Refresh Tokens"]
-        A6 --> A7["Backend stores tokens in server session store"]
-        A7 --> A8["Backend sets HttpOnly Secure Cookie with session ID"]
-        A8 --> A9["Browser automatically sends cookie on every request"]
-        A9 --> A10["Backend retrieves tokens from session and verifies JWT"]
-        A10 --> A11["Serve protected resource"]
+flowchart TD
+    %% Define columns
+    subgraph Browser["Browser / Frontend"]
+        direction TB
+        A1["Visit /protected (Cookie Flow)"]
+        A3["Redirect to Azure Entra ID login"]
+        A4["Azure login + MFA"]
+        A5["Redirect back to backend with auth code"]
+
+        B1["Visit /protected (Bearer Flow)"]
+        B3["Redirect to Azure login"]
+        B4["Azure login + MFA"]
+        B5["Redirect back to frontend with auth code"]
     end
 
-    subgraph BearerFlow["Bearer Token OAuth2 Flow"]
-        B1["Browser visits /protected"] --> B2["Backend says: Need Authorization"]
-        B2 --> B3["Browser redirects user to Azure login"]
-        B3 --> B4["Azure login + MFA"]
-        B4 --> B5["Redirect back to frontend with auth code"]
-        B5 --> B6["Frontend exchanges code (PKCE) directly with Azure for tokens"]
-        B6 --> B7["Frontend stores Access Token in memory/localStorage"]
-        B7 --> B8["Frontend sends token in Authorization header: Bearer <token>"]
-        B8 --> B9["Backend verifies JWT signature + claims"]
-        B9 --> B10["Serve protected resource"]
+    subgraph Backend["Backend / API Server"]
+        direction TB
+        A2["Check session cookie"]
+        A6["Exchange code for Access + ID + Refresh Tokens"]
+        A7["Store tokens in server session store"]
+        A8["Set HttpOnly Secure Cookie with session ID"]
+        A9["Verify JWT from session tokens"]
+        A10["Serve protected resource"]
+
+        B2["Respond: Need Authorization"]
+        B9["Verify JWT signature + claims"]
+        B10["Serve protected resource"]
     end
 
+    subgraph Azure["Azure Entra ID"]
+        direction TB
+        Az1["Login + MFA"]
+        Az2["Return auth code"]
+        Az3["Issue tokens"]
+    end
+
+    %% Cookie Flow
+    A1 --> A2
+    A2 -->|No cookie| A3
+    A3 --> Az1
+    Az1 --> Az2
+    Az2 --> A5
+    A5 --> A6
+    A6 --> Az3
+    Az3 --> A7
+    A7 --> A8
+    A8 --> A9
+    A9 --> A10
+
+    %% Bearer Flow
+    B1 --> B2
+    B2 --> B3
+    B3 --> Az1
+    Az1 --> Az2
+    Az2 --> B5
+    B5 --> B6["Frontend exchanges code (PKCE) for tokens"]
+    B6 --> Az3
+    Az3 --> B7["Store Access Token in memory/localStorage"]
+    B7 --> B8["Send token in Authorization header"]
+    B8 --> B9
+    B9 --> B10
 ```
