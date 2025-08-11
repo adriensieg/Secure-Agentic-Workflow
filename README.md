@@ -169,28 +169,31 @@ Each environment path branches into three risk levels:
 
 
 ```mermaid
-sequenceDiagram
-    participant Browser
-    participant Backend
-    participant Azure as Azure Entra ID
+flowchart TB
+    subgraph CookieFlow["Cookie-Based OAuth2 Flow"]
+        A1[Browser visits /protected] --> A2[Backend checks session cookie]
+        A2 -->|No cookie| A3[Redirect to Azure Entra ID login]
+        A3 --> A4[Azure login + MFA]
+        A4 --> A5[Redirect back to backend with auth code]
+        A5 --> A6[Backend exchanges code for Access + ID + Refresh Tokens]
+        A6 --> A7[Backend stores tokens in server session store]
+        A7 --> A8[Backend sets HttpOnly Secure Cookie with session ID]
+        A8 --> A9[Browser automatically sends cookie on every request]
+        A9 --> A10[Backend retrieves tokens from session and verifies JWT]
+        A10 --> A11[Serve protected resource]
+    end
 
-    %% Cookie-based
-    Browser->>Backend: GET /protected (no cookie)
-    Backend-->>Browser: 302 Redirect to Azure
-    Browser->>Azure: Auth request + PKCE
-    Azure-->>Browser: Auth code
-    Browser->>Backend: /callback?code=...
-    Backend->>Azure: Exchange code for Access+ID+Refresh tokens
-    Azure-->>Backend: Tokens (JWTs)
-    Backend->>Backend: Store tokens in session store
-    Backend-->>Browser: Set-Cookie: session_id=...
-    Note over Browser,Backend: On next requests, cookie auto-sent
+    subgraph BearerFlow["Bearer Token OAuth2 Flow"]
+        B1[Browser visits /protected] --> B2[Backend says: Need Authorization]
+        B2 --> B3[Browser redirects user to Azure login]
+        B3 --> B4[Azure login + MFA]
+        B4 --> B5[Redirect back to frontend with auth code]
+        B5 --> B6[Frontend exchanges code (PKCE) directly with Azure for tokens]
+        B6 --> B7[Frontend stores Access Token in memory/localStorage]
+        B7 --> B8[Frontend sends token in Authorization header: Bearer <token>]
+        B8 --> B9[Backend verifies JWT signature + claims]
+        B9 --> B10[Serve protected resource]
+    end
 
-    %% Bearer-token
-    Browser->>Azure: Auth request + PKCE
-    Azure-->>Browser: Auth code
-    Browser->>Azure: Exchange code for tokens directly
-    Azure-->>Browser: Tokens (JWTs)
-    Browser->>Backend: GET /protected with Authorization: Bearer <JWT>
 ```
 
