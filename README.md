@@ -167,30 +167,34 @@ Each environment path branches into three risk levels:
 
 
 ```mermaid
-flowchart TB
-    subgraph CookieFlow["Cookie-Based OAuth2 Flow"]
-        A1[Browser visits /protected] --> A2[Backend checks session cookie]
-        A2 -->|No cookie| A3[Redirect to Azure Entra ID login]
-        A3 --> A4[Azure login and MFA]
-        A4 --> A5[Redirect back to backend with auth code]
-        A5 --> A6[Backend exchanges code for Access, ID, and Refresh Tokens]
-        A6 --> A7[Backend stores tokens in server session store]
-        A7 --> A8[Backend sets HttpOnly Secure Cookie with session ID]
-        A8 --> A9[Browser automatically sends cookie on every request]
-        A9 --> A10[Backend retrieves tokens from session and verifies JWT]
-        A10 --> A11[Serve protected resource]
-    end
+sequenceDiagram
+    participant Browser as Browser (HTML/JS)
+    participant Backend as Backend (Python)
+    participant Azure as Azure Entra ID (IdP)
+    
+    Note over Browser,Azure: User tries to access protected resource
 
-    subgraph BearerFlow["Bearer Token OAuth2 Flow"]
-        B1[Browser visits /protected] --> B2[Backend says Need Authorization]
-        B2 --> B3[Browser redirects user to Azure login]
-        B3 --> B4[Azure login and MFA]
-        B4 --> B5[Redirect back to frontend with auth code]
-        B5 --> B6[Frontend exchanges code PKCE directly with Azure for tokens]
-        B6 --> B7[Frontend stores Access Token in memory or local storage]
-        B7 --> B8[Frontend sends token in Authorization header Bearer token]
-        B8 --> B9[Backend verifies JWT signature and claims]
-        B9 --> B10[Serve protected resource]
-    end
+    Browser->>Backend: GET /protected
+    Backend-->>Browser: 302 Redirect to Azure Entra ID
+    
+    Browser->>Azure: Authorization Request (client_id, redirect_uri, scope, state, PKCE_challenge)
+    
+    Azure-->>Browser: MFA Login page (username + password + MFA)
+    Browser->>Azure: Submit credentials + MFA code
+    
+    Azure-->>Browser: Redirect to redirect_uri with Authorization Code
+    
+    Browser->>Backend: GET /callback?code=AUTH_CODE&state=STATE
+    Backend->>Azure: POST Token Request (AUTH_CODE + PKCE_verifier + client_secret)
+    
+    Azure-->>Backend: Access Token (JWT) + ID Token (JWT) + Refresh Token
+    
+    Backend->>Browser: Set-Cookie (HttpOnly, Secure, SameSite) with Access Token or Session ID
+    Backend-->>Browser: HTML page + authenticated state
+    
+    Browser->>Backend: Subsequent requests with Cookie (HttpOnly) or Bearer Token in Authorization Header
+    Backend->>Backend: Verify JWT (signature, expiration, claims)
+    Backend-->>Browser: Protected Resource
+
 ```
 
