@@ -5,6 +5,20 @@
 - **Cookie**: `HttpOnly` vs. `Secure` vs. `SameSite`
 - **Cookie-based** vs. **Bearer Token-based**
 
+- **Authorization Request (`/authorize`)** — Ask the IdP to authenticate the user.
+- **PKCE (code_challenge `/verifier`)** — Prevents intercepted auth codes from being used by attackers.
+- **Auth Code** — Short-lived proof that the user authenticated and the IdP should give tokens.
+- **Token Exchange (`/token`)** — Swap the auth code for tokens (access, id, refresh).
+- Access Token (JWT) — Stateless claim token saying who you are and what you can do.
+- ID Token — Identity proof about the user (used by the Relying Party/Client).
+- Refresh Token — Longer-lived credential to get new access tokens.
+- HttpOnly Cookie — Browser stores `session id` or `token` out of reach of JS (mitigates XSS).
+- Authorization: Bearer `<token>` — Client explicitly presents token in header for resource access.
+- JWKS / signature verification — Use IdP’s public keys to check token signature and integrity.
+- State — Anti-CSRF value to tie the auth request → callback.
+- Nonce — Prevents replay of ID tokens (ensures ID token belongs to this request).
+- Revoke / Logout — Terminate tokens/sessions at IdP & app.
+
 ## Flow
 
 ```mermaid
@@ -72,9 +86,23 @@ sequenceDiagram
         API-->>SPA: 38) Return protected resource
     end
 ```
+- **<mark>Step 0</mark>**: Before starting, we'll need values from Azure Entra ID (formerly Azure AD):
+- `tenant_id` – e.g., "contoso.onmicrosoft.com" or GUID.
+- `authority URL` – "https://login.microsoftonline.com/{tenant_id}/v2.0".
+- `client_id` (backend app registration, confidential client).
+- `client_secret` (backend only — do NOT use in SPA flow).
+- `redirect_uri` (e.g., "https://app.example.com/callback").
+- `scopes` – ["openid", "profile", "offline_access", "api://API_CLIENT_ID/access_as_user"].
+- `token endpoint` – "{authority}/oauth2/v2.0/token".
+- `authorize endpoint` – "{authority}/oauth2/v2.0/authorize".
+- `jwks_uri` – from "{authority}/discovery/v2.0/keys".
 
 - **<mark>Step 1</mark>**: Browser requests a **protected page/resource**.
-   
+```python
+GET /protected HTTP/1.1
+Host: app.example.com
+```
+
 - **<mark>Step 2</mark>**: Backend detects **no valid session cookie** → issues an **OAuth2 Authorization Request** (redirect to Azure /authorize). Important params:
     - `response_type`=code,
     - `client_id`,
@@ -100,6 +128,18 @@ GET https://login.microsoftonline.com/{tenant}/oauth2/v2.0/authorize?
 - **<mark>Step 3 to 5</mark>**: User authenticates at Azure Entra ID: username/password → MFA step (phone, push, TOTP, FIDO, etc.) as required by **tenant Conditional Access**. Azure then redirects back with an **authorization code**.
 
 - **<mark>Step 6 to 8</mark>**: Token exchange (Backend/BFF): Backend exchanges code at Azure token endpoint with `client_secret` (confidential client) for `access_token` (JWT), `id_token` (JWT), and `refresh_token` (long, opaque string). Azure signs `JWTs` with RS256 and publishes keys via `JWKS`.
+
+**Step 7: Token Exchange (Backend confidential client)**
+
+```curl
+curl -X POST https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=authorization_code" \
+  -d "code=AUTH_CODE_123" \
+  -d "redirect_uri=https://app.example.com/callback" \
+  -d "client_id=BACKEND_CLIENT_ID" \
+  -d "client_secret=BACKEND_CLIENT_SECRET"
+```
 
 - **<mark>Step 9 to 10</mark>**: Backend stores tokens server-side (Session Store) and issues a **`HttpOnly Secure` cookie** to the browser: `session_id=SESS123; HttpOnly; Secure; SameSite=Strict`. Browser cannot read this cookie via JS (protects against XSS); cookie is `auto-sent` on future requests.
 
